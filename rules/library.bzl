@@ -469,12 +469,9 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         framework_vfs_overlay(
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
-            has_swift = False,
             modulemap = import_module_map,
-            private_hdrs = None,
             hdrs = import_headers,
             tags = _MANUAL,
-            deps = [],
             extra_search_paths = vfs_root,
         )
         import_vfsoverlays.append(import_name + "_vfs")
@@ -512,12 +509,9 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         framework_vfs_overlay(
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
-            has_swift = False,
             modulemap = import_module_map,
-            private_hdrs = None,
             hdrs = import_headers,
             tags = _MANUAL,
-            deps = [],
             extra_search_paths = vfs_root,
         )
         import_vfsoverlays.append(import_name + "_vfs")
@@ -546,17 +540,14 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         framework_vfs_overlay(
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
-            has_swift = False,
             modulemap = import_module_map,
-            private_hdrs = None,
             hdrs = import_headers,
             tags = _MANUAL,
-            deps = [],
-            extra_search_paths = None,
         )
         import_vfsoverlays.append(import_name + "_vfs")
 
     for vendored_dynamic_library in kwargs.pop("vendored_dynamic_libraries", []):
+        fail("no import for %s" % vendored_dynamic_library)
         import_headers += native.glob(
             ["**/*.h"],
             exclude = ["**/.DS_Store"],
@@ -575,26 +566,15 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         framework_vfs_overlay(
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
-            has_swift = False,
             modulemap = import_module_map,
-            private_hdrs = None,
             hdrs = import_headers,
             tags = _MANUAL,
-            deps = [],
-            extra_search_paths = None,
         )
         import_vfsoverlays.append(import_name + "_vfs")
 
-    # TODO: we need to deal with this or just leave them expliclty included for now
-    # Same with whatever is wrong with AppsFlyerFramework
     for xcframework in kwargs.pop("vendored_xcframeworks", []):
         vendored_deps.append(_xcframework(library_name = name, **xcframework))
-        #import_headers +=  native.glob(
-        #        ["**/*.h"],
-        #        exclude = ["**/.DS_Store"],
-        #)
-
-        print("WARNING: can't import", xcframework)
+        # TODO: for virtual frameworks we'll need to add this
 
     deps += vendored_deps
 
@@ -610,10 +590,6 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
 
     framework_vfs_overlay_name = name + "_vfs"
     framework_vfs_overlay_name_swift = name + "_vfs_swift"
-
-    # Key question: do we generate a new framework for imported frameworks?
-    # For CorePaymentCard it triggers an error for
-    # --objccopt=-Wno-error=incomplete-umbrella
 
     # TODO: remove framework if set
     # Needs to happen before headermaps are made, so the generated umbrella header gets added to those headermaps
@@ -651,28 +627,22 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         hdrs = objc_hdrs,
         tags = _MANUAL,
         deps = deps + private_deps + lib_names + import_vfsoverlays,
-        extra_search_paths = None,
     )
     private_deps.append(framework_vfs_overlay_name_swift)
 
     additional_objc_copts += [
         "-ivfsoverlay$(execpath :{})".format(framework_vfs_overlay_name),
-        #"-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name),
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
-        #"-I{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
     ]
     additional_swift_copts += [
         "-Xfrontend",
         "-vfsoverlay$(execpath :{})".format(framework_vfs_overlay_name_swift),
         "-Xfrontend",
-        #"-vfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
         # Perhaps we can rename this to .swm - don' tneed this here
         "-I{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
         "-Xcc",
         "-ivfsoverlay$(execpath :{})".format(framework_vfs_overlay_name_swift),
-        #"-Xcc",
-        #"-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
         "-Xcc",
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
     ]
@@ -800,7 +770,6 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         hdrs = objc_hdrs,
         tags = _MANUAL,
         deps = deps + private_deps + lib_names + import_vfsoverlays,
-        extra_search_paths = None,
     )
     private_deps.append(framework_vfs_overlay_name)
 

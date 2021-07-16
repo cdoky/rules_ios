@@ -327,7 +327,6 @@ def _apple_framework_packaging_impl(ctx):
     ]:
         set = depset(
             direct = [],
-            # Note: this seems like an issue
             transitive = [getattr(dep[apple_common.Objc], key) for dep in ctx.attr.deps],
         )
         _add_to_dict_if_present(objc_provider_fields, key, set)

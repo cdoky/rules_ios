@@ -218,8 +218,8 @@ framework_vfs_overlay = rule(
         "has_swift": attr.bool(default = False),
         "modulemap": attr.label(allow_single_file = True),
         "hdrs": attr.label_list(allow_files = True),
-        "private_hdrs": attr.label_list(allow_files = True),
-        "deps": attr.label_list(allow_files = True),
+        "private_hdrs": attr.label_list(allow_files = True, default = []),
+        "deps": attr.label_list(allow_files = True, default = []),
     },
     outputs = {
         "vfsoverlay_file": "%{name}.yaml",
