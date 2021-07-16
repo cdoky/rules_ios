@@ -8,7 +8,7 @@ load("//rules:library.bzl", "PrivateHeadersInfo", "apple_library")
 load("//rules:transition_support.bzl", "transition_support")
 load("//rules:internal.bzl", "FrameworkInfo")
 load("//rules:hmap.bzl", "HeaderMapInfo")
-load("//rules/framework:vfs_overlay.bzl", "VFSOverlayInfo", "write_vfs")
+load("//rules/framework:vfs_overlay.bzl", "VFSOverlayInfo", "make_vfsoverlay")
 
 _APPLE_FRAMEWORK_PACKAGING_KWARGS = [
     "visibility",
@@ -16,6 +16,7 @@ _APPLE_FRAMEWORK_PACKAGING_KWARGS = [
     "bundle_id",
     "skip_packaging",
 ]
+
 
 def apple_framework(name, apple_library = apple_library, **kwargs):
     """Builds and packages an Apple framework.
@@ -290,12 +291,11 @@ def _apple_framework_packaging_impl(ctx):
         else:
             ctx.actions.write(framework_manifest, "# Empty framework\n")
 
-    # Note: we need to turn of includes inside of rules_swift
-    # Potentially, we can piggy back on swift.vfsoverlay
-    # swiftmodule_out = []
-
     # gather objc provider fields
     # Note; this is needed for the framework stuff
+    # Eventually we need to remove any reference to objc provider
+    # and use CcInfo instead, see this issue for more details: https://github.com/bazelbuild/bazel/issues/10674
+
     objc_provider_fields = {
         "providers": [dep[apple_common.Objc] for dep in ctx.attr.transitive_deps],
     }
@@ -308,9 +308,7 @@ def _apple_framework_packaging_impl(ctx):
         direct = [],
         transitive = [getattr(dep[CcInfo].compilation_context, "defines") for dep in ctx.attr.deps if CcInfo in dep],
     ))
-    _add_to_dict_if_present(objc_provider_fields, "module_map", depset(
-        direct = modulemap_out,
-    ))
+
     for key in [
         "sdk_dylib",
         "sdk_framework",
@@ -362,59 +360,52 @@ def _apple_framework_packaging_impl(ctx):
             swift_common.create_module(name = swiftmodule_name, swift = swift_module),
         ]
 
-    # Eventually we need to remove any reference to objc provider
-    # and use CcInfo instead, see this issue for more details: https://github.com/bazelbuild/bazel/issues/10674
-
-    unpropagated_cc_infos = []
     direct_headers = []
     hmaps = []
-    merge_vfsoverlays = []
 
-    import_vfsoverlays = []
-    for dep in ctx.attr.vfs:
-        if VFSOverlayInfo in dep:
-            import_vfsoverlays.append(dep[VFSOverlayInfo].files)
+    if ctx.attr._virtualize:
+        import_vfsoverlays = []
+        for dep in ctx.attr.vfs:
+            if not VFSOverlayInfo in dep:
+                continue
+            import_vfsoverlays.append(dep[VFSOverlayInfo].vfs_obj)
 
-    # Progated interface headers - this must encompass all of them
-    propagated_interface_headers = []
-    swift_hdrs = []
+        # Progated interface headers - this must encompass all of them
+        propagated_interface_headers = []
 
-    # We need to map all the deps here - for both swift headers and others
-    fw_dep_vfsoverlays = []
-    for dep in ctx.attr.transitive_deps + ctx.attr.deps:
-        if not FrameworkInfo in dep:
-            continue
-        framework_info = dep[FrameworkInfo]
-        fw_dep_vfsoverlays.append(framework_info.vfsoverlay_infos)
-        propagated_interface_headers.append(framework_info.framework_headers)
+        # We need to map all the deps here - for both swift headers and others
+        fw_dep_vfsoverlays = []
+        for dep in ctx.attr.transitive_deps + ctx.attr.deps:
+            if not FrameworkInfo in dep:
+                continue
+            framework_info = dep[FrameworkInfo]
+            fw_dep_vfsoverlays.extend(framework_info.vfsoverlay_infos)
+            propagated_interface_headers.append(framework_info.framework_headers)
 
-        # Need swiftc gend' headers inside of the VFS
-        if CcInfo in dep:
+            # Collect generated headers. consider exposing all required generated
+            # headers in respective providers: -Swift, modulemap, -umbrella.h
+            if not CcInfo in dep:
+                continue
             for h in dep[CcInfo].compilation_context.headers.to_list():
-                if "-Swift.h" in h.path:
-                    swift_hdrs.append([h])
-                    propagated_interface_headers.append(depset([h]))
+                if h.is_source:
+                    continue
+                propagated_interface_headers.append(depset([h]))
 
-    vfs_output = ctx.actions.declare_file(ctx.attr.name + "public_vfs.yaml")
+        vfs_ret = make_vfsoverlay(
+            ctx,
+            hdrs = header_out,
+            module_map = modulemap_out,
+            private_hdrs = private_header_out,
+            has_swift = len(swiftmodule_out) > 0,
+            merge_vfsoverlays = import_vfsoverlays + fw_dep_vfsoverlays,
+            merge_tool = ctx.attr.merge_tool,
+        )
 
-    vfs_ret = write_vfs(
-        ctx,
-        hdrs = header_out,
-        module_map = modulemap_out,
-        private_hdrs = private_header_out,  # Note: we probably don't want this but some need it
-        has_swift = len(swiftmodule_out) > 0,
-        vfs_providers = [],
-        merge_vfsoverlays = import_vfsoverlays + fw_dep_vfsoverlays,
-        vfsoverlay_file = vfs_output,
-        merge_tool = ctx.attr.merge_tool,
-        extra_vfs_root = None,
-    )
-
-    _add_to_dict_if_present(compilation_context_fields, "headers", depset(
-        direct = header_out + private_header_out + modulemap_out,
-        # Note: this blows up the hmap
-        transitive = propagated_interface_headers + import_vfsoverlays + fw_dep_vfsoverlays + [depset([vfs_ret.vfsoverlay_file, vfs_ret.vfsoverlay_file_merged])],
-    ))
+        # Include a couple additional headers here since we're not merging
+        _add_to_dict_if_present(compilation_context_fields, "headers", depset(
+            direct = header_out + private_header_out + modulemap_out,
+            transitive = propagated_interface_headers
+        ))
 
     cc_info_provider = CcInfo(
         compilation_context = cc_common.create_compilation_context(
@@ -433,28 +424,28 @@ def _apple_framework_packaging_impl(ctx):
     out_files.extend(private_header_out)
     out_files.extend(modulemap_out)
 
+    if ctx.attr._virtualize:
+        cc_info = cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider])
+    else:
+        dep_cc_infos = [dep[CcInfo] for dep in ctx.attr.transitive_deps if CcInfo in dep]
+        cc_info = cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider], cc_infos=dep_cc_infos)
+
     return [
         FrameworkInfo(
             direct_framework_includes = None,
             cc_info = cc_info_provider,
             cc_info_merged = None,
-            unpropagated_cc_infos = unpropagated_cc_infos,
+            unpropagated_cc_infos = None,
             headermap_infos = depset(transitive = hmaps),
 
             # Consider propgating only framework ones, or the merged ones,
             # Note: we don't merge the top level VFS here, so we need to propagate the tuple
             # Consider trying to collapse
-            vfsoverlay_infos = depset([vfs_ret.vfsoverlay_file, vfs_ret.vfsoverlay_file_merged], transitive = import_vfsoverlays),
+            vfsoverlay_infos = [vfs_ret.vfs_obj],
             framework_headers = framework_headers,
         ),
         objc_provider,
-
-        # bare minimum to ensure compilation and package framework with modules and headers
-        # TODO: we'll need to switch this?
-        cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider]),
-
-        # Switch here?
-        # cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider], cc_infos = [dep[CcInfo] for dep in ctx.attr.transitive_deps if CcInfo in dep]),
+        cc_info,
         swift_common.create_swift_info(**swift_info_fields),
         DefaultInfo(files = depset(out_files)),
         AppleBundleInfo(
@@ -533,6 +524,9 @@ Valid values are:
                 "//rules/hmap:hmaptool",
             ),
         ),
+
+        # Virtualize means that compilers read from an in-memory file system
+        # instead of the OS's system.
         "_virtualize": attr.bool(
             default = True,
         ),

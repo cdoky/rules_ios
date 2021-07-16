@@ -475,7 +475,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             hdrs = import_headers,
             tags = _MANUAL,
             deps = [],
-            extra_vfs_root = vfs_root,
+            extra_search_paths = vfs_root,
         )
         import_vfsoverlays.append(import_name + "_vfs")
         vendored_deps.append(import_name)
@@ -518,7 +518,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             hdrs = import_headers,
             tags = _MANUAL,
             deps = [],
-            extra_vfs_root = vfs_root,
+            extra_search_paths = vfs_root,
         )
         import_vfsoverlays.append(import_name + "_vfs")
 
@@ -552,7 +552,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             hdrs = import_headers,
             tags = _MANUAL,
             deps = [],
-            extra_vfs_root = None,
+            extra_search_paths = None,
         )
         import_vfsoverlays.append(import_name + "_vfs")
 
@@ -581,7 +581,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             hdrs = import_headers,
             tags = _MANUAL,
             deps = [],
-            extra_vfs_root = None,
+            extra_search_paths = None,
         )
         import_vfsoverlays.append(import_name + "_vfs")
 
@@ -651,13 +651,13 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         hdrs = objc_hdrs,
         tags = _MANUAL,
         deps = deps + private_deps + lib_names + import_vfsoverlays,
-        extra_vfs_root = None,
+        extra_search_paths = None,
     )
     private_deps.append(framework_vfs_overlay_name_swift)
 
     additional_objc_copts += [
         "-ivfsoverlay$(execpath :{})".format(framework_vfs_overlay_name),
-        "-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name),
+        #"-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name),
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
         #"-I{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
     ]
@@ -665,14 +665,14 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         "-Xfrontend",
         "-vfsoverlay$(execpath :{})".format(framework_vfs_overlay_name_swift),
         "-Xfrontend",
-        "-vfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
+        #"-vfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
         # Perhaps we can rename this to .swm - don' tneed this here
         "-I{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
         "-Xcc",
         "-ivfsoverlay$(execpath :{})".format(framework_vfs_overlay_name_swift),
-        "-Xcc",
-        "-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
+        #"-Xcc",
+        #"-ivfsoverlay$(execpath :{}).merged".format(framework_vfs_overlay_name_swift),
         "-Xcc",
         "-F{}".format(VFS_OVERLAY_FRAMEWORK_SEARCH_PATH),
     ]
@@ -800,7 +800,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         hdrs = objc_hdrs,
         tags = _MANUAL,
         deps = deps + private_deps + lib_names + import_vfsoverlays,
-        extra_vfs_root = None,
+        extra_search_paths = None,
     )
     private_deps.append(framework_vfs_overlay_name)
 

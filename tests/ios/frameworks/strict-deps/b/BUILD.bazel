@@ -4,8 +4,8 @@ apple_framework(
     name = "b",
     deps = [
             "//tests/ios/frameworks/strict-deps/c",
-            "//tests/ios/frameworks/mixed-source/custom-module-map:CustomModuleMap",
-            "//tests/ios/frameworks/sources-with-prebuilt-binaries:GoogleMobileAds"
+            #"//tests/ios/frameworks/mixed-source/custom-module-map:CustomModuleMap",
+            #"//tests/ios/frameworks/sources-with-prebuilt-binaries:GoogleMobileAds"
     ],
     srcs = glob(["*.swift"]),
     platforms = {"ios": "13.0"},
