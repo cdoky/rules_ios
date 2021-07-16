@@ -294,8 +294,7 @@ def _apple_framework_packaging_impl(ctx):
         else:
             ctx.actions.write(framework_manifest, "# Empty framework\n")
 
-    # gather objc provider fields
-    # Note; this is needed for the framework stuff
+    # Gather objc provider fields
     # Eventually we need to remove any reference to objc provider
     # and use CcInfo instead, see this issue for more details: https://github.com/bazelbuild/bazel/issues/10674
 
@@ -404,7 +403,7 @@ def _apple_framework_packaging_impl(ctx):
         )
 
         framework_headers = depset(header_out + modulemap_out + private_header_out)
-        # Include a couple additional headers here since we're not merging
+        # Includes interface headers here ( handled in cc_info merge for no virutal )
         _add_to_dict_if_present(compilation_context_fields, "headers", depset(
             direct = header_out + private_header_out + modulemap_out,
             transitive = propagated_interface_headers
