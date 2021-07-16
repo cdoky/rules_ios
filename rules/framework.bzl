@@ -402,7 +402,6 @@ def _apple_framework_packaging_impl(ctx):
             private_hdrs = private_header_out,
             has_swift = len(swiftmodule_out) > 0,
             merge_vfsoverlays = import_vfsoverlays + fw_dep_vfsoverlays,
-            merge_tool = ctx.attr.merge_tool,
         )
 
         framework_headers = depset(header_out + modulemap_out + private_header_out)

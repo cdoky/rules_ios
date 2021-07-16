@@ -137,7 +137,6 @@ def _framework_vfs_overlay_impl(ctx):
         has_swift = ctx.attr.has_swift,
         merge_vfsoverlays = vfsoverlays,
         output = ctx.outputs.vfsoverlay_file,
-        merge_tool = ctx.attr.merge_tool,
         extra_search_paths = ctx.attr.extra_search_paths,
     )
 
@@ -179,7 +178,7 @@ def _make_vfs_obj(roots):
     return keys
 
 # Note: maybe we can put swiftmodules in modules...
-def make_vfsoverlay(ctx, hdrs, module_map, private_hdrs, has_swift, merge_tool, merge_vfsoverlays = [], extra_search_paths = None, output = None):
+def make_vfsoverlay(ctx, hdrs, module_map, private_hdrs, has_swift, merge_vfsoverlays = [], extra_search_paths = None, output = None):
     framework_path = "{search_path}/{framework_name}.framework".format(
         search_path = FRAMEWORK_SEARCH_PATH,
         framework_name = ctx.attr.framework_name,
@@ -221,7 +220,6 @@ framework_vfs_overlay = rule(
         "hdrs": attr.label_list(allow_files = True),
         "private_hdrs": attr.label_list(allow_files = True),
         "deps": attr.label_list(allow_files = True),
-        "merge_tool": attr.label(executable = True, default = Label("//rules/framework:merge_vfs_overlay"), cfg = "host"),
     },
     outputs = {
         "vfsoverlay_file": "%{name}.yaml",
