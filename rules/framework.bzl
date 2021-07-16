@@ -405,18 +405,13 @@ def _apple_framework_packaging_impl(ctx):
             merge_tool = ctx.attr.merge_tool,
         )
 
+        framework_headers = depset(header_out + modulemap_out + private_header_out)
         # Include a couple additional headers here since we're not merging
         _add_to_dict_if_present(compilation_context_fields, "headers", depset(
             direct = header_out + private_header_out + modulemap_out,
             transitive = propagated_interface_headers
         ))
         framework_info = FrameworkInfo(
-                direct_framework_includes = None,
-                cc_info = cc_info_provider,
-                cc_info_merged = None,
-                unpropagated_cc_infos = None,
-                headermap_infos = depset(transitive = hmaps),
-
                 # Consider propgating only framework ones, or the merged ones,
                 # Note: we don't merge the top level VFS here, so we need to propagate the tuple
                 # Consider trying to collapse
@@ -434,8 +429,6 @@ def _apple_framework_packaging_impl(ctx):
     )
 
     objc_provider = apple_common.new_objc_provider(**objc_provider_fields)
-
-    framework_headers = depset(header_out + modulemap_out + private_header_out)
 
     out_files = []
     out_files.extend(binary_out)
@@ -533,11 +526,6 @@ Valid values are:
             ),
         ),
 
-        # Virtualize means that compilers read from an in-memory file system
-        # instead of the OS's system.
-        "_virtualize": attr.bool(
-            default = True,
-        ),
         "bundle_id": attr.string(
             mandatory = False,
             doc = "The bundle identifier of the framework. Currently unused.",
@@ -582,8 +570,6 @@ the framework as a dependency.""",
                 """Internal - currently rules_ios the dict `platforms`
 """,
         ),
-        # TODO: consider renaming if we keep this
-        "merge_tool": attr.label(executable = True, default = Label("//rules/framework:merge_vfs_overlay"), cfg = "host"),
     },
     doc = "Packages compiled code into an Apple .framework package",
 )
