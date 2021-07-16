@@ -9,6 +9,7 @@ load("//rules:transition_support.bzl", "transition_support")
 load("//rules:internal.bzl", "FrameworkInfo")
 load("//rules:hmap.bzl", "HeaderMapInfo")
 load("//rules/framework:vfs_overlay.bzl", "VFSOverlayInfo", "make_vfsoverlay")
+load("//rules:features.bzl", "feature_names")
 
 _APPLE_FRAMEWORK_PACKAGING_KWARGS = [
     "visibility",
@@ -16,7 +17,6 @@ _APPLE_FRAMEWORK_PACKAGING_KWARGS = [
     "bundle_id",
     "skip_packaging",
 ]
-
 
 def apple_framework(name, apple_library = apple_library, **kwargs):
     """Builds and packages an Apple framework.
@@ -81,7 +81,8 @@ def _framework_packaging(ctx, action, inputs, outputs, manifest = None):
     if inputs == [None]:
         return []
 
-    if ctx.attr._virtualize:
+    virtualize_frameworks = feature_names.virtualize_frameworks in ctx.features
+    if virtualize_frameworks:
         return inputs
 
     if action in ctx.attr.skip_packaging:
@@ -236,7 +237,8 @@ def _apple_framework_packaging_impl(ctx):
             paths.join(framework_dir, "Modules", "module.modulemap"),
         ]
 
-    if not ctx.attr._virtualize:
+    virtualize_frameworks = feature_names.virtualize_frameworks in ctx.features
+    if not virtualize_frameworks:
         framework_manifest = ctx.actions.declare_file(framework_dir + ".manifest")
     else:
         framework_manifest = None
@@ -257,10 +259,11 @@ def _apple_framework_packaging_impl(ctx):
     swiftdoc_out = _framework_packaging(ctx, "swiftdoc", [swiftdoc_in], swiftdoc_out, framework_manifest)
 
     compilation_context_fields = {}
-    if not ctx.attr._virtualize:
+
+    if not virtualize_frameworks:
+        framework_files = _concat(binary_out, modulemap_out, header_out, private_header_out, swiftmodule_out, swiftdoc_out)
         framework_root = _find_framework_dir(framework_files)
         if framework_root:
-            framework_files = _concat(binary_out, modulemap_out, header_out, private_header_out, swiftmodule_out, swiftdoc_out)
             ctx.actions.run(
                 executable = ctx.executable._framework_packaging,
                 arguments = [
@@ -334,7 +337,7 @@ def _apple_framework_packaging_impl(ctx):
         "swift_infos": [dep[SwiftInfo] for dep in ctx.attr.transitive_deps if SwiftInfo in dep],
     }
 
-    if not ctx.attr._virtualize and swiftmodule_out:
+    if not virtualize_frameworks and swiftmodule_out:
         # only add a swift module to the SwiftInfo if we've actually got a swiftmodule
         swiftmodule_name = paths.split_extension(swiftmodule_in.basename)[0]
 
@@ -363,7 +366,8 @@ def _apple_framework_packaging_impl(ctx):
     direct_headers = []
     hmaps = []
 
-    if ctx.attr._virtualize:
+    if virtualize_frameworks:
+
         import_vfsoverlays = []
         for dep in ctx.attr.vfs:
             if not VFSOverlayInfo in dep:
@@ -406,6 +410,22 @@ def _apple_framework_packaging_impl(ctx):
             direct = header_out + private_header_out + modulemap_out,
             transitive = propagated_interface_headers
         ))
+        framework_info = FrameworkInfo(
+                direct_framework_includes = None,
+                cc_info = cc_info_provider,
+                cc_info_merged = None,
+                unpropagated_cc_infos = None,
+                headermap_infos = depset(transitive = hmaps),
+
+                # Consider propgating only framework ones, or the merged ones,
+                # Note: we don't merge the top level VFS here, so we need to propagate the tuple
+                # Consider trying to collapse
+                vfsoverlay_infos = [vfs_ret.vfs_obj],
+                framework_headers = framework_headers,
+            )
+
+    else:
+        framework_info = FrameworkInfo()
 
     cc_info_provider = CcInfo(
         compilation_context = cc_common.create_compilation_context(
@@ -424,26 +444,14 @@ def _apple_framework_packaging_impl(ctx):
     out_files.extend(private_header_out)
     out_files.extend(modulemap_out)
 
-    if ctx.attr._virtualize:
+    if virtualize_frameworks:
         cc_info = cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider])
     else:
         dep_cc_infos = [dep[CcInfo] for dep in ctx.attr.transitive_deps if CcInfo in dep]
         cc_info = cc_common.merge_cc_infos(direct_cc_infos = [cc_info_provider], cc_infos=dep_cc_infos)
 
     return [
-        FrameworkInfo(
-            direct_framework_includes = None,
-            cc_info = cc_info_provider,
-            cc_info_merged = None,
-            unpropagated_cc_infos = None,
-            headermap_infos = depset(transitive = hmaps),
-
-            # Consider propgating only framework ones, or the merged ones,
-            # Note: we don't merge the top level VFS here, so we need to propagate the tuple
-            # Consider trying to collapse
-            vfsoverlay_infos = [vfs_ret.vfs_obj],
-            framework_headers = framework_headers,
-        ),
+        framework_info,
         objc_provider,
         cc_info,
         swift_common.create_swift_info(**swift_info_fields),

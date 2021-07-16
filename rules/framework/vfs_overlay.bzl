@@ -1,4 +1,5 @@
 load("//rules:internal.bzl", "FrameworkInfo")
+load("//rules:features.bzl", "feature_names")
 
 FRAMEWORK_SEARCH_PATH = "/build_bazel_rules_ios/frameworks"
 
@@ -119,12 +120,14 @@ def _vfs_swift_module_contents(ctx, framework_name, root_dir):
 def _framework_vfs_overlay_impl(ctx):
     vfsoverlays = []
 
-    ## TODO: _virtualize negate this here
-    for dep in ctx.attr.deps:
-        if FrameworkInfo in dep:
-            vfsoverlays.extend(dep[FrameworkInfo].vfsoverlay_infos)
-        if VFSOverlayInfo in dep:
-            vfsoverlays.append(dep[VFSOverlayInfo].vfs_obj)
+    # Conditionally collect and pass in the VFS overlay here.
+    virtualize_frameworks = feature_names.virtualize_frameworks in ctx.features
+    if virtualize_frameworks:
+        for dep in ctx.attr.deps:
+            if FrameworkInfo in dep:
+                vfsoverlays.extend(dep[FrameworkInfo].vfsoverlay_infos)
+            if VFSOverlayInfo in dep:
+                vfsoverlays.append(dep[VFSOverlayInfo].vfs_obj)
 
     vfs_ret = make_vfsoverlay(
         ctx,
