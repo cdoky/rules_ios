@@ -265,6 +265,121 @@ def _xcframework_slice(*, xcframework_name, identifier, platform, platform_varia
         ))
     return (platform, platform_variant, supported_archs, import_name)
 
+def _xcframework_slice_vfs(*, xcframework_name, identifier, platform, platform_variant, supported_archs, build_type, path):
+    linkage, packaging = _xcframework_build_type(**build_type)
+    import_name = "{}-{}".format(xcframework_name, identifier)
+    if (linkage, packaging) == ("dynamic", "framework"):
+        # apple_dynamic_framework_import(
+        #     name = import_name,
+        #     framework_imports = native.glob(
+        #         [path + "/**/*"],
+        #         exclude = ["**/.DS_Store"],
+        #     ),
+        #     deps = [],
+        #     tags = _MANUAL,
+        # )
+        import_headers = native.glob(
+            [path + "/**/*.h"],
+        )
+        import_module_maps = native.glob(
+            [path + "/**/*.modulemap"],
+        )
+
+        if len(import_module_maps) > 0:
+            import_module_map = import_module_maps[0]
+        else:
+            import_module_map = None
+        print("elton!!!")
+        print(import_name)
+        print(import_headers)
+        print(import_module_maps)
+        # vfs_root = vendored_dynamic_framework
+
+        vfs_imported_framework = _find_imported_framework_name(import_headers)
+
+        # vfs_framework_name = vfs_imported_framework if vfs_imported_framework else namespace
+        framework_vfs_overlay(
+            name = import_name,
+            framework_name = vfs_imported_framework,
+            modulemap = import_module_map,
+            hdrs = import_headers,
+            tags = _MANUAL,
+            extra_search_paths = vfs_imported_framework,
+        )
+        # import_vfsoverlays.append(import_name + "_vfs")
+        # elif (linkage, packaging) == ("static", "framework"):
+        #     apple_static_framework_import(
+        #         name = import_name,
+        #         framework_imports = native.glob(
+        #             [path + "/**/*"],
+        #             exclude = ["**/.DS_Store"],
+        #         ),
+        #         deps = [],
+        #         tags = _MANUAL,
+        #     )
+        # elif (linkage, packaging) == ("static", "library"):
+        #     objc_import(
+        #         name = import_name,
+        #         archives = [path],
+        #         tags = _MANUAL,
+        #     )
+
+    else:
+        fail("Unsupported xcframework slice type {} ({}) in {}".format(
+            build_type,
+            identifier,
+            xcframework_name,
+        ))
+    return (platform, platform_variant, supported_archs, import_name)
+
+def _xcframework_for_vfs(*, library_name, name, slices):
+    xcframework_name = "{}-import-{}.xcframework_vfs".format(library_name, name)
+    conditions = {}
+    for slice in slices:
+        if slice["platform_variant"] != "simulator":
+            print("contunue!")
+            continue
+        platform, platform_variant, archs, name = _xcframework_slice_vfs(xcframework_name = xcframework_name, **slice)
+        platform_setting = "@build_bazel_rules_ios//rules/apple_platform:" + platform
+        # platform_variant_setting = "@build_bazel_rules_ios//rules/apple_platform:platform_variant_" + platform_variant if platform_variant else None
+
+        for arch in archs:
+            if arch == "arm64" and platform_variant == "simulator":
+                # TODO: support sim on apple silicon by having a config setting for platform_variant
+                continue
+            elif arch == "x86_64" and platform_variant == "maccatalyst":
+                # TODO: support maccatalyst
+                continue
+
+            arch_setting = "@build_bazel_rules_apple//apple:{}_{}".format(platform, arch)
+            config_setting_name = "{}-{}".format(
+                xcframework_name,
+                "_".join([x for x in (platform, platform_variant, arch) if x]),
+            )
+            if config_setting_name in conditions:
+                fail("Duplicate slice for {}.xcframework used by {} ({}): {} and {}".format(
+                    name,
+                    library_name,
+                    config_setting_name,
+                    conditions[config_setting_name],
+                    name,
+                ))
+            conditions[config_setting_name] = name
+            selects.config_setting_group(
+                name = config_setting_name,
+                match_all = [platform_setting, arch_setting],
+            )
+
+    native.alias(
+        name = xcframework_name,
+        actual = select(conditions, no_match_error = "Unable to find a matching slice for {}.xcframework used by {}".format(
+            name,
+            library_name,
+        )),
+        tags = _MANUAL,
+    )
+    return xcframework_name
+
 def _xcframework(*, library_name, name, slices):
     xcframework_name = "{}-import-{}.xcframework".format(library_name, name)
     conditions = {}
@@ -299,7 +414,6 @@ def _xcframework(*, library_name, name, slices):
                 name = config_setting_name,
                 match_all = [platform_setting, arch_setting],
             )
-
     native.alias(
         name = xcframework_name,
         actual = select(conditions, no_match_error = "Unable to find a matching slice for {}.xcframework used by {}".format(
@@ -494,11 +608,28 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         import_module_maps = native.glob(
             ["%s/**/*.modulemap" % vendored_dynamic_framework],
         )
+        import_swiftmodules = native.glob(
+            ["%s/**/*.swiftmodule" % vendored_dynamic_framework],
+            exclude_directories = 0,
+        )
+
+        # if vendored_dynamic_framework == "OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework":
+        #     import_swiftmodules = ["OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework/Modules/OTPublishersHeadlessSDK.swiftmodule"]
+        print("fdafds")
+        print(vendored_dynamic_framework)
+
+        print(import_swiftmodules)
+        print(import_module_maps)
 
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
         else:
             import_module_map = None
+
+        if len(import_swiftmodules) > 0:
+            import_swiftmodule = import_swiftmodules[0]
+        else:
+            import_swiftmodule = None
 
         vfs_root = vendored_dynamic_framework
 
@@ -508,6 +639,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
             modulemap = import_module_map,
+            swiftmodule = import_swiftmodule,
             hdrs = import_headers,
             tags = _MANUAL,
             extra_search_paths = vfs_root,
@@ -569,8 +701,43 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         import_vfsoverlays.append(import_name + "_vfs")
 
     for xcframework in kwargs.pop("vendored_xcframeworks", []):
-        vendored_deps.append(_xcframework(library_name = name, **xcframework))
-        # TODO: for virtual frameworks we'll need to add this
+        import_headers = native.glob(
+            ["**/*.h"],
+        )
+        import_module_maps = native.glob(
+            ["**/*.modulemap"],
+        )
+        if len(import_module_maps) > 0:
+            import_module_map = import_module_maps[0]
+        else:
+            import_module_map = None
+        vfs_imported_framework = _find_imported_framework_name(import_headers)
+
+        print(import_headers)
+        print(import_module_map)
+        print(vfs_imported_framework)
+        print("elton")
+        print(name)
+        print(xcframework)
+        output = _xcframework(library_name = name, **xcframework)
+        print(output)
+        vendored_deps.append(output)  #OneTrust-CMP-XCFramework-import-OTPublishersHeadlessSDK.xcframework
+
+        # import_vfsoverlays.append(_xcframework_for_vfs(library_name = name, **xcframework))
+        # vfs_framework_name = vfs_imported_framework if vfs_imported_framework else namespace
+        # print(vfs_framework_name)
+        # vfs_root = xcframework
+
+        # # TODO: for virtual frameworks we'll need to add this
+        # framework_vfs_overlay(
+        #     name = output + "_vfs",
+        #     framework_name = vfs_framework_name,
+        #     modulemap = import_module_map,
+        #     hdrs = import_headers,
+        #     tags = _MANUAL,
+        #     # extra_search_paths = vfs_root,
+        # )
+        # import_vfsoverlays.append(output + "_vfs")
 
     deps += vendored_deps
 
