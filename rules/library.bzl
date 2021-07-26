@@ -285,6 +285,9 @@ def _xcframework_slice_vfs(*, xcframework_name, identifier, platform, platform_v
             [path + "/**/*.modulemap"],
         )
 
+        import_swiftmodules = native.glob(
+            ["%s/**/*.swiftmodule/*.*" % path],
+        )
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
         else:
@@ -302,6 +305,7 @@ def _xcframework_slice_vfs(*, xcframework_name, identifier, platform, platform_v
             name = import_name,
             framework_name = vfs_imported_framework,
             modulemap = import_module_map,
+            swiftmodule = import_swiftmodules,
             hdrs = import_headers,
             tags = _MANUAL,
             extra_search_paths = vfs_imported_framework,
@@ -609,27 +613,23 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             ["%s/**/*.modulemap" % vendored_dynamic_framework],
         )
         import_swiftmodules = native.glob(
-            ["%s/**/*.swiftmodule" % vendored_dynamic_framework],
-            exclude_directories = 0,
+            ["%s/**/*.swiftmodule/*.*" % vendored_dynamic_framework],
         )
 
         # if vendored_dynamic_framework == "OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework":
         #     import_swiftmodules = ["OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework/Modules/OTPublishersHeadlessSDK.swiftmodule"]
-        print("fdafds")
-        print(vendored_dynamic_framework)
-
-        print(import_swiftmodules)
-        print(import_module_maps)
+        # print("fdafds")
+        # print(import_swiftmodules)
 
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
         else:
             import_module_map = None
 
-        if len(import_swiftmodules) > 0:
-            import_swiftmodule = import_swiftmodules[0]
-        else:
-            import_swiftmodule = None
+        # if len(import_swiftmodules) > 0:
+        #     import_swiftmodule = import_swiftmodules[0]
+        # else:
+        #     import_swiftmodule = None
 
         vfs_root = vendored_dynamic_framework
 
@@ -639,7 +639,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
             modulemap = import_module_map,
-            swiftmodule = import_swiftmodule,
+            swiftmodule = import_swiftmodules,
             hdrs = import_headers,
             tags = _MANUAL,
             extra_search_paths = vfs_root,
@@ -723,7 +723,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         print(output)
         vendored_deps.append(output)  #OneTrust-CMP-XCFramework-import-OTPublishersHeadlessSDK.xcframework
 
-        # import_vfsoverlays.append(_xcframework_for_vfs(library_name = name, **xcframework))
+        import_vfsoverlays.append(_xcframework_for_vfs(library_name = name, **xcframework))
         # vfs_framework_name = vfs_imported_framework if vfs_imported_framework else namespace
         # print(vfs_framework_name)
         # vfs_root = xcframework

@@ -42,16 +42,18 @@ def _make_root(ctx, framework_name, root_dir, extra_search_paths, module_map, sw
             "name": "module.modulemap",
             "external-contents": module_map[0].path,
         })
+
     if len(swiftmodule):
-        # print("eoton!!")
-        # print(swiftmodule)
         modules_contents.append({
             "type": "directory",
-            "name": swiftmodule[0].basename,
+            "name": swiftmodule[0].dirname.split("/").pop(),
             "contents": [
-                {"type": "file", "name": "x86_64.swiftinterface", "external-contents": swiftmodule[0].path + "/x86_64.swiftinterface"},
-                {"type": "file", "name": "x86_64-apple-ios-simulator.swiftdoc", "external-contents": swiftmodule[0].path + "/x86_64-apple-ios-simulator.swiftdoc"},
-                {"type": "file", "name": "x86_64-apple-ios-simulator.swiftinterface", "external-contents": swiftmodule[0].path + "/x86_64-apple-ios-simulator.swiftinterface"},
+                {
+                    "type": "file",
+                    "name": file.basename,
+                    "external-contents": file.path,
+                }
+                for file in swiftmodule
             ],
         })
 
@@ -222,7 +224,7 @@ framework_vfs_overlay = rule(
         "extra_search_paths": attr.string(mandatory = False),
         "has_swift": attr.bool(default = False),
         "modulemap": attr.label(allow_single_file = True),
-        "swiftmodule": attr.label(allow_single_file = True),
+        "swiftmodule": attr.label_list(allow_files = True),
         "hdrs": attr.label_list(allow_files = True),
         "private_hdrs": attr.label_list(allow_files = True, default = []),
         "deps": attr.label_list(allow_files = True, default = []),
