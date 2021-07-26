@@ -502,6 +502,9 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         import_module_maps = native.glob(
             ["%s/**/*.modulemap" % vendored_static_framework],
         )
+        import_swiftmodules = native.glob(
+            ["%s/**/*.swiftmodule/*.*" % vendored_static_framework],
+        )
         vfs_root = vendored_static_framework
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
@@ -514,6 +517,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
             modulemap = import_module_map,
+            swiftmodule = import_swiftmodules,
             hdrs = import_headers,
             tags = _MANUAL,
             extra_search_paths = vfs_root,
@@ -542,21 +546,10 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         import_swiftmodules = native.glob(
             ["%s/**/*.swiftmodule/*.*" % vendored_dynamic_framework],
         )
-
-        # if vendored_dynamic_framework == "OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework":
-        #     import_swiftmodules = ["OTPublishersHeadlessSDK.xcframework/ios-arm64_x86_64-simulator/OTPublishersHeadlessSDK.framework/Modules/OTPublishersHeadlessSDK.swiftmodule"]
-        # print("fdafds")
-        # print(import_swiftmodules)
-
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
         else:
             import_module_map = None
-
-        # if len(import_swiftmodules) > 0:
-        #     import_swiftmodule = import_swiftmodules[0]
-        # else:
-        #     import_swiftmodule = None
 
         vfs_root = vendored_dynamic_framework
 
@@ -587,6 +580,9 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         import_module_maps = native.glob(
             ["**/*.modulemap"],
         )
+        import_swiftmodules = native.glob(
+            ["**/*.swiftmodule/*.*"],
+        )
         if len(import_module_maps) > 0:
             import_module_map = import_module_maps[0]
         else:
@@ -597,33 +593,7 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
             name = import_name + "_vfs",
             framework_name = vfs_framework_name,
             modulemap = import_module_map,
-            hdrs = import_headers,
-            tags = _MANUAL,
-        )
-        import_vfsoverlays.append(import_name + "_vfs")
-
-    for vendored_dynamic_library in kwargs.pop("vendored_dynamic_libraries", []):
-        fail("no import for %s" % vendored_dynamic_library)
-
-        # TODO remove this since won't be executed
-        import_headers += native.glob(
-            ["**/*.h"],
-        )
-        import_module_map = native.glob(
-            ["**/*.modulemap"],
-        )
-
-        if len(import_module_maps) > 0:
-            import_module_map = import_module_maps[0]
-        else:
-            import_module_map = None
-
-        vfs_imported_framework = _find_imported_framework_name(import_headers)
-        vfs_framework_name = vfs_imported_framework if vfs_imported_framework else namespace
-        framework_vfs_overlay(
-            name = import_name + "_vfs",
-            framework_name = vfs_framework_name,
-            modulemap = import_module_map,
+            swiftmodule = import_swiftmodules,
             hdrs = import_headers,
             tags = _MANUAL,
         )
@@ -641,32 +611,12 @@ def apple_library(name, library_tools = {}, export_private_headers = True, names
         else:
             import_module_map = None
         vfs_imported_framework = _find_imported_framework_name(import_headers)
-
-        print(import_headers)
-        print(import_module_map)
-        print(vfs_imported_framework)
-        print("elton")
-        print(name)
-        print(xcframework)
         output = _xcframework(library_name = name, **xcframework)
-        print(output)
         vendored_deps.append(output)  #OneTrust-CMP-XCFramework-import-OTPublishersHeadlessSDK.xcframework
-
         import_vfsoverlays.append(output + "_vfs")
-        # vfs_framework_name = vfs_imported_framework if vfs_imported_framework else namespace
-        # print(vfs_framework_name)
-        # vfs_root = xcframework
 
-        # # TODO: for virtual frameworks we'll need to add this
-        # framework_vfs_overlay(
-        #     name = output + "_vfs",
-        #     framework_name = vfs_framework_name,
-        #     modulemap = import_module_map,
-        #     hdrs = import_headers,
-        #     tags = _MANUAL,
-        #     # extra_search_paths = vfs_root,
-        # )
-        # import_vfsoverlays.append(output + "_vfs")
+    for vendored_dynamic_library in kwargs.pop("vendored_dynamic_libraries", []):
+        fail("no support for dynamic library: %s" % vendored_dynamic_library)
 
     deps += vendored_deps
 
