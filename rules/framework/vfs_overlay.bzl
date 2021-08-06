@@ -105,7 +105,7 @@ def _make_root(vfs_parent, bin_dir_path, build_file_path, framework_name, root_d
             if len(last_parts) < 2:
                 continue
             paths.append(struct(path = hdr.path, framework_path = last_parts[1]))
-        subtrees = _build_subtrees(paths, vfs_parent)
+        subtrees = _build_subtrees(paths, vfs_prefix)
         private_headers_contents.extend(subtrees["contents"])
 
     modules_contents = []
